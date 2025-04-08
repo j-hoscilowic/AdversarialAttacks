@@ -1,0 +1,762 @@
+--- Starting recursive file copy script ---
+Searching for files within: /home/user/AdversarialAttacks/
+Looking for filenames: models.py, data.py, tester.py, CommonWeakness.py, AdversarialInputBase.py, utils.py, ImageHandling.py, __init__.py, NIPS17.py, CommonFigures.py
+------------------------------------------------------------
+Reminder: If you encountered a 'cv2' error, install OpenCV using:
+pip install opencv-python
+------------------------------------------------------------
+Found '__init__.py' at: /home/user/AdversarialAttacks/optimizer/__init__.py
+Found 'NIPS17.py' at: /home/user/AdversarialAttacks/data/NIPS17.py
+Found 'utils.py' at: /home/user/AdversarialAttacks/data/utils.py
+Found 'ImageHandling.py' at: /home/user/AdversarialAttacks/utils/ImageHandling.py
+Found 'CommonFigures.py' at: /home/user/AdversarialAttacks/utils/plot/CommonFigures.py
+Found 'AdversarialInputBase.py' at: /home/user/AdversarialAttacks/attacks/AdversarialInput/AdversarialInputBase.py
+Found 'CommonWeakness.py' at: /home/user/AdversarialAttacks/attacks/AdversarialInput/CommonWeakness.py
+
+--- Reading Found Files ---
+Reading content of: /home/user/AdversarialAttacks/optimizer/__init__.py
+Reading content of: /home/user/AdversarialAttacks/data/NIPS17.py
+Reading content of: /home/user/AdversarialAttacks/data/utils.py
+Reading content of: /home/user/AdversarialAttacks/utils/ImageHandling.py
+Reading content of: /home/user/AdversarialAttacks/utils/plot/CommonFigures.py
+Reading content of: /home/user/AdversarialAttacks/attacks/AdversarialInput/AdversarialInputBase.py
+Reading content of: /home/user/AdversarialAttacks/attacks/AdversarialInput/CommonWeakness.py
+
+--- Summary ---
+Found and attempted to read: __init__.py, NIPS17.py, utils.py, ImageHandling.py, CommonFigures.py, AdversarialInputBase.py, CommonWeakness.py
+Missing or unreadable: models.py (Not found in search), data.py (Not found in search), tester.py (Not found in search)
+
+--- Combined File Content ---
+Please copy the text below this line (including the START/END markers) and paste it into the chat:
+----------------------------------------------------------------------
+
+==================== START OF FILE: /home/user/AdversarialAttacks/optimizer/__init__.py ====================
+from .PGD import PGD
+from torch.optim import Adam, AdamW, SGD, Optimizer
+from .default import default_optimizer, default_lr_scheduler
+
+__all__ = ['PGD', 'AdamW', 'SGD', 'Adam', 'default_lr_scheduler', 'default_optimizer']
+
+==================== END OF FILE: /home/user/AdversarialAttacks/optimizer/__init__.py ====================
+
+
+==================== START OF FILE: /home/user/AdversarialAttacks/data/NIPS17.py ====================
+from torch.utils.data import Dataset, DataLoader
+import csv
+import os
+from PIL import Image
+from torchvision import transforms
+
+__kaggle_link__ = 'kaggle datasets download -d google-brain/nips-2017-adversarial-learning-development-set'
+
+
+class NIPS17(Dataset):
+    def __init__(self, images_path='./resources/NIPS17/images/',
+                 label_path='./resources/NIPS17/images.csv'):
+        self.labels = {}
+        with open(label_path) as f:
+            reader = csv.reader(f)
+            for line in list(reader)[1:]:
+                name, label = line[0], int(line[6]) - 1
+                self.labels[name + '.png'] = label
+        self.images = os.listdir(images_path)
+        self.images.sort()
+        self.images_path = images_path
+        self.transforms = transforms.Compose([
+            transforms.Resize((256, 256)),
+            transforms.ToTensor(),
+        ])
+
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, item):
+        name = self.images[item]
+        x = Image.open(os.path.join(self.images_path, name))
+        y = self.labels[name]
+        return self.transforms(x), y
+
+
+def get_NIPS17_loader(batch_size=64,
+                      num_workers=8,
+                      pin_memory=True,
+                      download=False,
+                      shuffle=False,
+                      **kwargs,
+                      ):
+    if download:
+        os.system(__kaggle_link__)
+    set = NIPS17(**kwargs)
+    loader = DataLoader(set, batch_size=batch_size, num_workers=num_workers, pin_memory=pin_memory,
+                        shuffle=shuffle)
+    return loader
+
+==================== END OF FILE: /home/user/AdversarialAttacks/data/NIPS17.py ====================
+
+
+==================== START OF FILE: /home/user/AdversarialAttacks/data/utils.py ====================
+from torch.utils.data import Dataset, DataLoader
+
+
+def get_loader(dataset: Dataset,
+               batch_size=32,
+               shuffle=True,
+               ):
+    loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
+    return loader
+
+==================== END OF FILE: /home/user/AdversarialAttacks/data/utils.py ====================
+
+
+==================== START OF FILE: /home/user/AdversarialAttacks/utils/ImageHandling.py ====================
+import torch
+import torchvision.transforms
+from PIL import Image
+import numpy as np
+import os
+from torch import Tensor
+import cv2
+
+
+@torch.no_grad()
+def show_image(x: Tensor) -> Image.Image:
+    if len(x.shape) == 4:
+        x = x.squeeze(0)
+    x = x.permute(1, 2, 0) * 255
+    x = x.cpu().numpy()
+    x = Image.fromarray(np.uint8(x))
+    return x
+
+
+@torch.no_grad()
+def save_image(x: Tensor, path='./0.png') -> Image.Image:
+    if len(x.shape) == 4:
+        x = x.squeeze(0)
+    x = x.permute(1, 2, 0) * 255
+    x = x.cpu().numpy()
+    if x.shape[2] == 1:
+        cv2.imwrite(path, x.squeeze())
+        return x
+    x = Image.fromarray(np.uint8(x))
+    x.save(path)
+    return x
+
+
+@torch.no_grad()
+def scale_and_show_tensor(x: Tensor):
+    x = x.cpu()
+    x += torch.min(x)
+    x /= torch.max(x)
+    return show_image(x)
+
+
+def get_image(path: str = 'image.jpg') -> Tensor:
+    image = Image.open(path)
+    image = image.convert('RGB')
+    transform = torchvision.transforms.ToTensor()
+    return transform(image)
+
+
+def concatenate_image(img_path: str = './generated',
+                      padding=1,
+                      img_shape=(32, 32, 3),
+                      row=10,
+                      col=10,
+                      save_path='concated.png',
+                      ):
+    imgs = os.listdir(img_path)
+    assert len(imgs) >= row * col, 'images should be enough for demonstration'
+    alls = []
+    for img in imgs:
+        img = Image.open(os.path.join(img_path, img))
+        x = np.array(img)
+        x = np.pad(x, ((padding, padding), (padding, padding), (0, 0)))
+        alls.append(x)
+    alls = alls[:row * col]
+    x = np.stack(alls)
+    x = x.reshape((row, col, img_shape[0] + padding * 2, img_shape[1] + padding * 2, img_shape[2]))
+    x = torch.from_numpy(x)
+    x = x.permute(0, 2, 1, 3, 4).reshape(
+        row * (img_shape[0] + padding * 2), col * (img_shape[1] + padding * 2),
+        img_shape[2]).numpy()
+    x = Image.fromarray(x)
+    x.save(save_path)
+
+
+def total_variation(x):
+    adv_patch = x
+    if len(x.shape) == 3:
+        tvcomp1 = torch.sum(torch.abs(adv_patch[:, :, 1:] - adv_patch[:, :, :-1] + 0.000001), 0)
+        tvcomp1 = torch.sum(torch.sum(tvcomp1, 0), 0)
+        tvcomp2 = torch.sum(torch.abs(adv_patch[:, 1:, :] - adv_patch[:, :-1, :] + 0.000001), 0)
+        tvcomp2 = torch.sum(torch.sum(tvcomp2, 0), 0)
+        tv = tvcomp1 + tvcomp2
+    elif len(x.shape) == 4:
+        tvcomp1 = torch.sum(torch.abs(adv_patch[:, :, :, 1:] - adv_patch[:, :, :, :-1] + 0.000001), 0)
+        tvcomp1 = torch.sum(tvcomp1)
+        tvcomp2 = torch.sum(torch.abs(adv_patch[:, :, 1:, :] - adv_patch[:, :, :-1, :] + 0.000001), 0)
+        tvcomp2 = torch.sum(tvcomp2)
+        tv = tvcomp1 + tvcomp2
+    else:
+        raise ValueError
+    return tv / torch.numel(adv_patch)
+
+==================== END OF FILE: /home/user/AdversarialAttacks/utils/ImageHandling.py ====================
+
+
+==================== START OF FILE: /home/user/AdversarialAttacks/utils/plot/CommonFigures.py ====================
+from matplotlib import pyplot as plt
+import numpy as np
+
+
+def matrix_heatmap(harvest: np.array, save_path='./heatmap_of_matrix.png'):
+    plt.imshow(harvest)
+    plt.tight_layout()
+    plt.colorbar()
+    plt.axis('off')
+    plt.savefig(save_path, bbox_inches='tight')
+    plt.show()
+
+==================== END OF FILE: /home/user/AdversarialAttacks/utils/plot/CommonFigures.py ====================
+
+
+==================== START OF FILE: /home/user/AdversarialAttacks/attacks/AdversarialInput/AdversarialInputBase.py ====================
+import torch
+from abc import abstractmethod
+from typing import List
+from torch import Tensor
+from math import ceil
+
+
+class AdversarialInputAttacker():
+    def __init__(self, model: List[torch.nn.Module],
+                 epsilon=16 / 255,
+                 norm='Linf'):
+        assert norm in ['Linf', 'L2']
+        self.norm = norm
+        self.epsilon = epsilon
+        self.models = model
+        self.init()
+        self.model_distribute()
+        self.device = torch.device('cuda')
+        self.n = len(self.models)
+
+    @abstractmethod
+    def attack(self, *args, **kwargs):
+        pass
+
+    def __call__(self, *args, **kwargs):
+        return self.attack(*args, **kwargs)
+
+    def model_distribute(self):
+        '''
+        make each model on one gpu
+        :return:
+        '''
+        num_gpus = torch.cuda.device_count()
+        models_each_gpu = ceil(len(self.models) / num_gpus)
+        for i, model in enumerate(self.models):
+            model.to(torch.device(f'cuda:{num_gpus - 1 - i // models_each_gpu}'))
+            model.device = torch.device(f'cuda:{num_gpus - 1 - i // models_each_gpu}')
+
+    def init(self):
+        # set the model parameters requires_grad is False
+        for model in self.models:
+            model.requires_grad_(False)
+            model.eval()
+
+    def to(self, device: torch.device):
+        for model in self.models:
+            model.to(device)
+            model.device = device
+        self.device = device
+
+    def clamp(self, x: Tensor, ori_x: Tensor) -> Tensor:
+        B = x.shape[0]
+        if self.norm == 'Linf':
+            x = torch.clamp(x, min=ori_x - self.epsilon, max=ori_x + self.epsilon)
+        elif self.norm == 'L2':
+            difference = x - ori_x
+            distance = torch.norm(difference.view(B, -1), p=2, dim=1)
+            mask = distance > self.epsilon
+            if torch.sum(mask) > 0:
+                difference[mask] = difference[mask] / distance[mask].view(torch.sum(mask), 1, 1, 1) * self.epsilon
+                x = ori_x + difference
+        x = torch.clamp(x, min=0, max=1)
+        return x
+
+==================== END OF FILE: /home/user/AdversarialAttacks/attacks/AdversarialInput/AdversarialInputBase.py ====================
+
+
+==================== START OF FILE: /home/user/AdversarialAttacks/attacks/AdversarialInput/CommonWeakness.py ====================
+import torch
+from .AdversarialInputBase import AdversarialInputAttacker
+from typing import Callable, List, Iterable
+from attacks.utils import *
+from .utils import cosine_similarity
+from torch import nn
+import random
+from torchvision import transforms
+import numpy as np
+from scipy import stats as st
+
+
+class MI_CosineSimilarityEncourager(AdversarialInputAttacker):
+    def __init__(self,
+                 model: List[nn.Module],
+                 total_step: int = 10,
+                 random_start: bool = False,
+                 step_size: float = 50,
+                 criterion: Callable = nn.CrossEntropyLoss(),
+                 targeted_attack=False,
+                 mu=1,
+                 outer_optimizer=None,
+                 *args,
+                 **kwargs
+                 ):
+        self.random_start = random_start
+        self.total_step = total_step
+        self.step_size = step_size
+        self.criterion = criterion
+        self.targerted_attack = targeted_attack
+        self.mu = mu
+        self.outer_optimizer = outer_optimizer
+        super(MI_CosineSimilarityEncourager, self).__init__(model, *args, **kwargs)
+
+    def perturb(self, x):
+        x = x + (torch.rand_like(x) - 0.5) * 2 * self.epsilon
+        x = clamp(x)
+        return x
+
+    def attack(self, x, y, ):
+        N = x.shape[0]
+        original_x = x.clone()
+        momentum = torch.zeros_like(x)
+        self.outer_momentum = torch.zeros_like(x)
+        if self.random_start:
+            x = self.perturb(x)
+
+        for _ in range(self.total_step):
+            self.begin_attack(x.clone().detach())
+            for model in self.models:
+                x.requires_grad = True
+                loss = self.criterion(model(x.to(model.device)), y.to(model.device))
+                loss.backward()
+                grad = x.grad
+                self.grad_record.append(grad)
+                x.requires_grad = False
+                # update
+                if self.targerted_attack:
+                    momentum = self.mu * momentum - grad / torch.norm(grad.reshape(N, -1), p=2, dim=1).view(N, 1, 1, 1)
+                    x += self.step_size * momentum
+                else:
+                    momentum = self.mu * momentum + grad / torch.norm(grad.reshape(N, -1), p=2, dim=1).view(N, 1, 1, 1)
+                    x += self.step_size * momentum
+                    # x += self.step_size * grad / torch.norm(grad.reshape(N, -1), p=2, dim=1).view(N, 1, 1, 1)
+                x = clamp(x)
+                x = clamp(x, original_x - self.epsilon, original_x + self.epsilon)
+            x = self.end_attack(x)
+            x = clamp(x, original_x - self.epsilon, original_x + self.epsilon)
+
+        return x
+
+    @torch.no_grad()
+    def begin_attack(self, origin: torch.tensor):
+        self.original = origin
+        self.grad_record = []
+
+    @torch.no_grad()
+    def end_attack(self, now: torch.tensor, ksi=16 / 255 / 5):
+        '''
+        theta: original_patch
+        theta_hat: now patch in optimizer
+        theta = theta + ksi*(theta_hat - theta), so:
+        theta =(1-ksi )theta + ksi* theta_hat
+        '''
+        patch = now
+        if self.outer_optimizer is None:
+            fake_grad = (patch - self.original)
+            self.outer_momentum = self.mu * self.outer_momentum + fake_grad / torch.norm(fake_grad, p=1)
+            patch.mul_(0)
+            patch.add_(self.original)
+            patch.add_(ksi * self.outer_momentum.sign())
+            # patch.add_(ksi * fake_grad)
+        else:
+            fake_grad = - ksi * (patch - self.original)
+            self.outer_optimizer.zero_grad()
+            patch.mul_(0)
+            patch.add_(self.original)
+            patch.grad = fake_grad
+            self.outer_optimizer.step()
+        patch = clamp(patch)
+        grad_similarity = cosine_similarity(self.grad_record)
+        del self.grad_record
+        del self.original
+        return patch
+
+
+class MI_RandomWeight(AdversarialInputAttacker):
+    def __init__(self,
+                 model: List[nn.Module],
+                 total_step: int = 10, random_start: bool = False,
+                 step_size: float = 16 / 255 / 5,
+                 criterion: Callable = nn.CrossEntropyLoss(),
+                 targeted_attack=False,
+                 mu: float = 50,
+                 *args,
+                 **kwargs
+                 ):
+        self.random_start = random_start
+        self.total_step = total_step
+        self.step_size = step_size
+        self.criterion = criterion
+        self.targerted_attack = targeted_attack
+        self.mu = mu
+        super(MI_RandomWeight, self).__init__(model, *args, **kwargs)
+
+    def perturb(self, x):
+        x = x + (torch.rand_like(x) - 0.5) * 2 * self.epsilon
+        x = clamp(x)
+        return x
+
+    def random_by_mean(self, mean: float = 1, eps=5) -> float:
+        '''
+        random a number in [0, 2*mean]. The expectation is mean.
+        :param mean:
+        :return:
+        '''
+        x = (random.random() - 0.5) * 2  # with range [-1, 1], mean 0
+        x *= eps  # delta = 2*eps
+        x = x + mean  # expectation is mean
+        return x
+
+    def attack(self, x, y, ):
+        N = x.shape[0]
+        original_x = x.clone()
+        momentum = torch.zeros_like(x)
+        if self.random_start:
+            x = self.perturb(x)
+
+        for _ in range(self.total_step):
+            x.requires_grad = True
+            # loss = 0
+            # for model in self.models:
+            #     loss += self.criterion(model(x.to(model.device)), y.to(model.device)).to(x.device) \
+            #             * self.random_by_mean()
+            logit = 0
+            for model in self.models:
+                logit += model(x.to(model.device)).to(x.device) * self.random_by_mean()
+            loss = self.criterion(logit, y)
+            loss.backward()
+            grad = x.grad
+            x.requires_grad = False
+            # update
+            if self.targerted_attack:
+                momentum = self.mu * momentum - grad / torch.norm(grad.reshape(N, -1), p=1, dim=1).view(N, 1, 1, 1)
+                x += self.step_size * momentum.sign()
+            else:
+                momentum = self.mu * momentum + grad / torch.norm(grad.reshape(N, -1), p=1, dim=1).view(N, 1, 1, 1)
+                x += self.step_size * momentum.sign()
+            x = clamp(x)
+            x = clamp(x, original_x - self.epsilon, original_x + self.epsilon)
+
+        return x
+
+
+class MI_CommonWeakness(AdversarialInputAttacker):
+    def __init__(self,
+                 model: List[nn.Module],
+                 total_step: int = 10,
+                 random_start: bool = False,
+                 step_size: float = 16 / 255 / 5,
+                 criterion: Callable = nn.CrossEntropyLoss(),
+                 targeted_attack=False,
+                 mu=1,
+                 outer_optimizer=None,
+                 reverse_step_size=16 / 255 / 15,
+                 inner_step_size: float = 250,
+                 DI=False,
+                 TI=False,
+                 *args,
+                 **kwargs
+                 ):
+        self.random_start = random_start
+        self.total_step = total_step
+        self.step_size = step_size
+        self.criterion = criterion
+        self.targerted_attack = targeted_attack
+        self.mu = mu
+        self.outer_optimizer = outer_optimizer
+        self.reverse_step_size = reverse_step_size
+        super(MI_CommonWeakness, self).__init__(model, *args, **kwargs)
+        self.inner_step_size = inner_step_size
+        self.DI = DI
+        self.TI = TI
+        if DI:
+            self.aug_policy = transforms.Compose([
+                transforms.RandomCrop((int(224 * 0.9), int(224 * 0.9)), padding=224 - int(224 * 0.9)),
+            ])
+        else:
+            self.aug_policy = nn.Identity()
+        if TI:
+            self.ti = self.gkern().to(self.device)
+            self.ti.requires_grad_(False)
+
+    def perturb(self, x):
+        x = x + (torch.rand_like(x) - 0.5) * 2 * self.epsilon
+        x = clamp(x)
+        return x
+
+    def attack(self, x, y, ):
+        N = x.shape[0]
+        original_x = x.clone()
+        inner_momentum = torch.zeros_like(x)
+        self.outer_momentum = torch.zeros_like(x)
+        if self.random_start:
+            x = self.perturb(x)
+
+        for _ in range(self.total_step):
+            # --------------------------------------------------------------------------------#
+            # first step
+            self.begin_attack(x.clone().detach())
+            x.requires_grad = True
+            logit = 0
+            for model in self.models:
+                logit += model(x.to(model.device)).to(x.device)
+            loss = self.criterion(logit, y)
+            loss.backward()
+            grad = x.grad
+            if self.TI:
+                grad = self.ti(grad)
+            x.requires_grad = False
+            if self.targerted_attack:
+                x += self.reverse_step_size * grad.sign()
+            else:
+                x -= self.reverse_step_size * grad.sign()
+                # x -= self.reverse_step_size * grad / torch.norm(grad.reshape(N, -1), p=2, dim=1).view(N, 1, 1, 1)
+            x = clamp(x)
+            x = clamp(x, original_x - self.epsilon, original_x + self.epsilon)
+            # --------------------------------------------------------------------------------#
+            # second step
+            x.grad = None
+            # self.begin_attack(x.clone().detach())
+            for model in self.models:
+                x.requires_grad = True
+                aug_x = self.aug_policy(x)
+                loss = self.criterion(model(aug_x.to(model.device)), y.to(model.device))
+                loss.backward()
+                grad = x.grad
+                self.grad_record.append(grad)
+                x.requires_grad = False
+                # update
+                if self.TI:
+                    grad = self.ti(grad)
+                if self.targerted_attack:
+                    inner_momentum = self.mu * inner_momentum - grad / torch.norm(grad.reshape(N, -1), p=2, dim=1).view(
+                        N, 1, 1, 1)
+                    x += self.inner_step_size * inner_momentum
+                else:
+                    inner_momentum = self.mu * inner_momentum + grad / torch.norm(grad.reshape(N, -1), p=2, dim=1).view(
+                        N, 1, 1, 1)
+                    x += self.inner_step_size * inner_momentum
+                x = clamp(x)
+                x = clamp(x, original_x - self.epsilon, original_x + self.epsilon)
+            x = self.end_attack(x)
+            x = clamp(x, original_x - self.epsilon, original_x + self.epsilon)
+
+        return x
+
+    @torch.no_grad()
+    def begin_attack(self, origin: torch.tensor):
+        self.original = origin
+        self.grad_record = []
+
+    @torch.no_grad()
+    def end_attack(self, now: torch.tensor, ksi=16 / 255 / 5):
+        '''
+        theta: original_patch
+        theta_hat: now patch in optimizer
+        theta = theta + ksi*(theta_hat - theta), so:
+        theta =(1-ksi )theta + ksi* theta_hat
+        '''
+        patch = now
+        if self.outer_optimizer is None:
+            fake_grad = (patch - self.original)
+            self.outer_momentum = self.mu * self.outer_momentum + fake_grad / torch.norm(fake_grad, p=1)
+            patch.mul_(0)
+            patch.add_(self.original)
+            patch.add_(ksi * self.outer_momentum.sign())
+            # patch.add_(ksi * fake_grad)
+        else:
+            fake_grad = - ksi * (patch - self.original)
+            self.outer_optimizer.zero_grad()
+            patch.mul_(0)
+            patch.add_(self.original)
+            patch.grad = fake_grad
+            self.outer_optimizer.step()
+        patch = clamp(patch)
+        grad_similarity = cosine_similarity(self.grad_record)
+        del self.grad_record
+        del self.original
+        return patch
+
+    @staticmethod
+    def gkern(kernlen=15, nsig=3):
+        """Returns a 2D Gaussian kernel array."""
+        x = np.linspace(-nsig, nsig, kernlen)
+        kern1d = st.norm.pdf(x)
+        kernel_raw = np.outer(kern1d, kern1d)
+        kernel = kernel_raw / kernel_raw.sum()
+        kernel = torch.tensor(kernel, dtype=torch.float)
+        conv = nn.Conv2d(3, 3, kernel_size=kernlen, stride=1, padding=kernlen // 2, bias=False, groups=3)
+        kernel = kernel.repeat(3, 1, 1).view(3, 1, kernlen, kernlen)
+        conv.weight.data = kernel
+        return conv
+
+
+class Adam_CommonWeakness(AdversarialInputAttacker):
+    def __init__(self,
+                 model: List[nn.Module],
+                 total_step: int = 10,
+                 random_start: bool = False,
+                 step_size: float = 1e-3,
+                 criterion: Callable = nn.CrossEntropyLoss(),
+                 targeted_attack=False,
+                 mu=1,
+                 reverse_step_size=16 / 255 / 15,
+                 inner_step_size: float = 250,
+                 DI=False,
+                 TI=False,
+                 *args,
+                 **kwargs
+                 ):
+        self.random_start = random_start
+        self.total_step = total_step
+        self.step_size = step_size
+        self.criterion = criterion
+        self.targerted_attack = targeted_attack
+        self.mu = mu
+        self.reverse_step_size = reverse_step_size
+        super(Adam_CommonWeakness, self).__init__(model, *args, **kwargs)
+        self.inner_step_size = inner_step_size
+        self.DI = DI
+        self.TI = TI
+        if DI:
+            self.aug_policy = transforms.Compose([
+                transforms.RandomCrop((int(224 * 0.9), int(224 * 0.9)), padding=224 - int(224 * 0.9)),
+            ])
+        else:
+            self.aug_policy = nn.Identity()
+        if TI:
+            self.ti = self.gkern().to(self.device)
+            self.ti.requires_grad_(False)
+
+    def perturb(self, x):
+        x = x + (torch.rand_like(x) - 0.5) * 2 * self.epsilon
+        x = clamp(x)
+        return x
+
+    def attack(self, x, y, ):
+        N = x.shape[0]
+        original_x = x.clone()
+        inner_momentum = torch.zeros_like(x)
+        self.outer_optimizer = torch.optim.Adam([x], lr=self.step_size, maximize=True)
+        if self.random_start:
+            x = self.perturb(x)
+
+        for _ in range(self.total_step):
+            # --------------------------------------------------------------------------------#
+            # first step
+            self.begin_attack(x.clone().detach())
+            x.requires_grad = True
+            logit = 0
+            for model in self.models:
+                logit += model(x.to(model.device)).to(x.device)
+            loss = self.criterion(logit, y)
+            loss.backward()
+            grad = x.grad
+            if self.TI:
+                grad = self.ti(grad)
+            x.requires_grad = False
+            if self.targerted_attack:
+                x += self.reverse_step_size * grad.sign()
+            else:
+                x -= self.reverse_step_size * grad.sign()
+                # x -= self.reverse_step_size * grad / torch.norm(grad.reshape(N, -1), p=2, dim=1).view(N, 1, 1, 1)
+            x = inplace_clamp(x)
+            x = inplace_clamp(x, original_x - self.epsilon, original_x + self.epsilon)
+            self.outer_optimizer.zero_grad()
+            # --------------------------------------------------------------------------------#
+            # second step
+            x.grad = None
+            # self.begin_attack(x.clone().detach())
+            for model in self.models:
+                x.requires_grad = True
+                aug_x = self.aug_policy(x)
+                loss = self.criterion(model(aug_x.to(model.device)), y.to(model.device))
+                loss.backward()
+                grad = x.grad
+                self.grad_record.append(grad)
+                x.requires_grad = False
+                # update
+                if self.TI:
+                    grad = self.ti(grad)
+                if self.targerted_attack:
+                    inner_momentum = self.mu * inner_momentum - grad / torch.norm(grad.reshape(N, -1), p=2, dim=1).view(
+                        N, 1, 1, 1)
+                    x += self.inner_step_size * inner_momentum
+                else:
+                    inner_momentum = self.mu * inner_momentum + grad / torch.norm(grad.reshape(N, -1), p=2, dim=1).view(
+                        N, 1, 1, 1)
+                    x += self.inner_step_size * inner_momentum
+                self.outer_optimizer.zero_grad()
+                x = inplace_clamp(x)
+                x = inplace_clamp(x, original_x - self.epsilon, original_x + self.epsilon)
+            x = self.end_attack(x)
+            x = inplace_clamp(x, original_x - self.epsilon, original_x + self.epsilon)
+
+        return x
+
+    @torch.no_grad()
+    def begin_attack(self, origin: torch.tensor):
+        self.original = origin
+        self.grad_record = []
+
+    @torch.no_grad()
+    def end_attack(self, now: torch.tensor):
+        '''
+        theta: original_patch
+        theta_hat: now patch in optimizer
+        theta = theta + ksi*(theta_hat - theta), so:
+        theta =(1-ksi )theta + ksi* theta_hat
+        '''
+        patch = now
+        fake_grad = (patch - self.original)
+        patch.mul_(0)
+        patch.add_(self.original)
+        patch.grad = fake_grad
+        self.outer_optimizer.step()
+        self.outer_optimizer.zero_grad()
+        # patch.add_(ksi * fake_grad)
+        patch = inplace_clamp(patch)
+        del self.grad_record
+        del self.original
+        return patch
+
+    @staticmethod
+    def gkern(kernlen=15, nsig=3):
+        """Returns a 2D Gaussian kernel array."""
+        x = np.linspace(-nsig, nsig, kernlen)
+        kern1d = st.norm.pdf(x)
+        kernel_raw = np.outer(kern1d, kern1d)
+        kernel = kernel_raw / kernel_raw.sum()
+        kernel = torch.tensor(kernel, dtype=torch.float)
+        conv = nn.Conv2d(3, 3, kernel_size=kernlen, stride=1, padding=kernlen // 2, bias=False, groups=3)
+        kernel = kernel.repeat(3, 1, 1).view(3, 1, kernlen, kernlen)
+        conv.weight.data = kernel
+        return conv
+==================== END OF FILE: /home/user/AdversarialAttacks/attacks/AdversarialInput/CommonWeakness.py ====================
+
+
+----------------------------------------------------------------------
+--- End of Combined File Content ---
